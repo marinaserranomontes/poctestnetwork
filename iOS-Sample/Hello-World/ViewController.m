@@ -30,27 +30,54 @@ static NSString* const kToken = @"";
 }
 
 /**
- * canConnect - Whether I can connect or not
- * canPublish - This will be false when publisher fail to publish the stream
- *              as well as when bw < 150K
- * canSubscribe - This will be false when subscriber fail to subscribe the stream
- *                as well as when bw < 150K
+ * result -
+ * OTNetworkTestResultVideoAndVoice - Good for both Video and Audio
+ * OTNetworkTestResultVoiceOnly     - Audio only sessions possible (when "bps < 150K
+ *                                    and > 50K" or packet loss ratio > 3%)
+ * OTNetworkTestResultNotGood       - No Video and Audio (when platform connectivity
+ *                                    failed or bps < 50K or packet loss ratio > 5%)
  */
-- (void)networkTestDidCompleteWithConnectResult:(BOOL)canConnect
-                                publisherResult:(BOOL)canPublish
-                               subscriberResult:(BOOL)canSubscribe
-                                          error:(OTError*)error;
+- (void)networkTestDidCompleteWithResult:(enum OTNetworkTestResult)result
+                                   error:(OTError*)error
 {
-    NSLog(@"Test finished : canConnect %d, canPub %d, canSub %d, error %@",
-          canConnect,canPublish,canSubscribe,error.localizedDescription);
+    NSString *resultMessage = nil;
+    if(result == OTNetworkTestResultVideoAndVoice)
+    {
+        resultMessage = @"Result : OTNetworkTestResultVideoAndVoice";
+        
+    }
+    else if(result == OTNetworkTestResultVoiceOnly)
+    {
+        resultMessage = [NSString stringWithFormat:
+                         @"Result : OTNetworkTestResultVoiceOnly,Error %@",
+                         error.localizedDescription];
+    }
+    else
+    {
+        resultMessage = [NSString stringWithFormat:
+                         @"Result : OTNetworkTestResultNotGood,Error %@",
+                         error.localizedDescription];
+    }
+    NSLog(@"%@",resultMessage);
+    dispatch_async(dispatch_get_main_queue(), ^{
+       [self.activityIndicatorView stopAnimating];
+        self.activityIndicatorView.hidden = YES;
+        self.statusLabel.text = @"Network check finished.";
+        self.resultLabel.text = resultMessage;
+        
+    });
 }
 
 - (void)viewDidLoad
 {
+    self.title = @"OpenTok Test Network";
     [super viewDidLoad];
     
     _networkTest = [[OTNetworkTest alloc] init];
     
+    [self.activityIndicatorView startAnimating];
+    self.statusLabel.text = @"Checking network...";
+    self.resultLabel.text = @"";
     [_networkTest runConnectivityTestWithApiKey:kApiKey
                                       sessionId:kSessionId
                                           token:kToken
@@ -58,6 +85,11 @@ static NSString* const kToken = @"";
                             qualityTestDuration:10
                                        delegate:self];
     
+}
+
+- (BOOL)prefersStatusBarHidden
+{
+    return YES;
 }
 
 @end

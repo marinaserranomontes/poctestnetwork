@@ -9,6 +9,12 @@
 #import <Foundation/Foundation.h>
 #import <OpenTok/OpenTok.h>
 
+enum OTNetworkTestResult {
+    OTNetworkTestResultVideoAndVoice,
+    OTNetworkTestResultVoiceOnly,
+    OTNetworkTestResultNotGood
+};
+
 @protocol OTNetworkTestDelegate;
 
 @interface OTNetworkTest : NSObject
@@ -27,10 +33,8 @@
 
 @optional
 
-- (void)networkTestDidCompleteWithConnectResult:(BOOL)canConnect
-                                 publisherResult:(BOOL)canPublish
-                                subscriberResult:(BOOL)canSubscribe
-                                           error:(OTError*)error;
+- (void)networkTestDidCompleteWithResult:(enum OTNetworkTestResult)result
+                                   error:(OTError*)error;
 
 @end
 

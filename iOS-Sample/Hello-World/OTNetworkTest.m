@@ -23,15 +23,20 @@ OTSubscriberKitNetworkStatsDelegate >
     NSString *_token;
     BOOL _runQualityStatsTest;
     int _qualityTestDuration;
-    BOOL isConnected;
-    BOOL isPublishing;
-    BOOL isSubscribing;
+    enum OTNetworkTestResult _result;
     OTError *_error;
-    double prevVideoTimestamp ;
-    double prevVideoBytes ;
-    long bw;
-    
-
+    double prevVideoTimestamp;
+    double prevVideoBytes;
+    double prevAudioTimestamp;
+    double prevAudioBytes;
+    uint64_t prevVideoPacketsLost;
+    uint64_t prevVideoPacketsRcvd;
+    uint64_t prevAudioPacketsLost;
+    uint64_t prevAudioPacketsRcvd;
+    long video_bw;
+    long audio_bw;
+    double video_pl_ratio;
+    double audio_pl_ratio;
 }
 
 - (void)runConnectivityTestWithApiKey:(NSString*)apiKey
@@ -41,8 +46,19 @@ OTSubscriberKitNetworkStatsDelegate >
                  qualityTestDuration:(int)qualityTestDuration
                             delegate:(id<OTNetworkTestDelegate>)delegate
 {
-    
-    prevVideoTimestamp = prevVideoBytes = 0.0;
+    prevVideoTimestamp = 0;
+    prevVideoBytes = 0;
+    prevAudioTimestamp = 0;
+    prevAudioBytes = 0;
+    prevVideoPacketsLost = 0;
+    prevVideoPacketsRcvd = 0;
+    prevAudioPacketsLost = 0;
+    prevAudioPacketsRcvd = 0;
+    video_bw = 0;
+    audio_bw = 0;
+    video_pl_ratio = -1;
+    audio_pl_ratio = -1;
+
     
     _token = [token copy];
     _runQualityStatsTest = needsQualityTest;
@@ -55,30 +71,24 @@ OTSubscriberKitNetworkStatsDelegate >
     [self doConnect];
 }
 
--(void)dispatchResultsToDelegateWithConnectResult:(BOOL)canConnect
-                                    publishResult:(BOOL)canPublish
-                                  subscribeResult:(BOOL)canSubsribe
+-(void)dispatchResultsToDelegateWithResult:(enum OTNetworkTestResult)result
                                             error:(OTError*)error
 {
-    if(canConnect && _session)
+    if(_session.sessionConnectionStatus == OTSessionConnectionStatusConnected)
     {
         // Will report result from sessionDidDisconnect callback
         // The callback will in term call the delegate
-        isConnected = canConnect;
-        isPublishing = canPublish;
-        isSubscribing = canSubsribe;
+        _result = result;
         _error = [error copy];
         [_session disconnect:nil];
     } else
     {
         if ([self.networkTestDelegate
-             respondsToSelector:@selector(networkTestDidCompleteWithConnectResult:
-                                          publisherResult:subscriberResult:error:)])
+             respondsToSelector:@selector(networkTestDidCompleteWithResult:
+                                          error:)])
         {
-            [self.networkTestDelegate networkTestDidCompleteWithConnectResult:canConnect
-                                                               publisherResult:canPublish
-                                                              subscriberResult:canSubsribe
-                                                                         error:error];
+            [self.networkTestDelegate networkTestDidCompleteWithResult:result
+                                                                 error:error];
         }
         [self cleanupSession];
     }
@@ -97,10 +107,8 @@ OTSubscriberKitNetworkStatsDelegate >
     [_session connectWithToken:_token error:&error];
     if (error)
     {
-        [self dispatchResultsToDelegateWithConnectResult:NO
-                                           publishResult:NO
-                                         subscribeResult:NO
-                                                   error:error];
+        [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                            error:error];
     }
 }
 
@@ -110,9 +118,6 @@ OTSubscriberKitNetworkStatsDelegate >
     _subscriber = nil;
     _token = nil;
     _error = nil;
-    isConnected = NO;
-    isPublishing = NO;
-    isSubscribing = NO;
     // this is a good place to notify the end-user that publishing has stopped.
 }
 
@@ -130,10 +135,8 @@ OTSubscriberKitNetworkStatsDelegate >
     [_session publish:_publisher error:&error];
     if (error)
     {
-        [self dispatchResultsToDelegateWithConnectResult:YES
-                                           publishResult:NO
-                                         subscribeResult:NO
-                                                   error:error];
+        [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                            error:error];
     }
 }
 
@@ -161,11 +164,9 @@ OTSubscriberKitNetworkStatsDelegate >
     [_session subscribe:_subscriber error:&error];
     if (error)
     {
-        [self dispatchResultsToDelegateWithConnectResult:YES
-                                           publishResult:YES
-                                         subscribeResult:NO
-                                                   error:error];
-    }   
+        [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                            error:error];
+    }
 }
 
 /**
@@ -191,11 +192,67 @@ videoNetworkStatsUpdated:(OTSubscriberKitVideoNetworkStats*)stats
     int timeDelta = 1000; // 1 second
     if (stats.timestamp - prevVideoTimestamp >= timeDelta)
     {
-        bw = (8 * (stats.videoBytesReceived - prevVideoBytes)) / ((stats.timestamp - prevVideoTimestamp) / 1000ull);
+        video_bw = (8 * (stats.videoBytesReceived - prevVideoBytes)) / ((stats.timestamp - prevVideoTimestamp) / 1000ull);
         
-        NSLog(@"videoBytesReceived %llu, bps %ld",stats.videoBytesReceived, bw);
+        NSLog(@"videoBytesReceived %llu, bps %ld, packetsLost %llu",stats.videoBytesReceived, video_bw, stats.videoPacketsLost);
         prevVideoTimestamp = stats.timestamp;
         prevVideoBytes = stats.videoBytesReceived;
+        [self checkQuality:stats];
+    }
+}
+
+- (void)subscriber:(OTSubscriberKit*)subscriber
+audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
+{
+    if (prevAudioTimestamp == 0)
+    {
+        prevAudioTimestamp = stats.timestamp;
+        prevAudioBytes = stats.audioBytesReceived;
+    }
+    
+    int timeDelta = 1000; // 1 second
+    if (stats.timestamp - prevAudioTimestamp >= timeDelta)
+    {
+        audio_bw = (8 * (stats.audioBytesReceived - prevAudioBytes)) / ((stats.timestamp - prevAudioTimestamp) / 1000ull);
+        
+        NSLog(@"audioBytesReceived %llu, bps %ld, packetsLost %llu",stats.audioBytesReceived, audio_bw,stats.audioPacketsLost);
+        prevAudioTimestamp = stats.timestamp;
+        prevAudioBytes = stats.audioBytesReceived;
+        [self checkQuality:stats];
+    }
+}
+
+- (void)checkQuality:(id)stats
+{
+    if ([stats isKindOfClass:[OTSubscriberKitVideoNetworkStats class]])
+    {
+        video_pl_ratio = -1;
+        OTSubscriberKitVideoNetworkStats *videoStats =
+        (OTSubscriberKitVideoNetworkStats *) stats;
+        if (prevVideoPacketsRcvd != 0) {
+            uint64_t pl = videoStats.videoPacketsLost - prevVideoPacketsLost;
+            uint64_t pr = videoStats.videoPacketsReceived - prevVideoPacketsRcvd;
+            uint64_t pt = pl + pr;
+            if (pt > 0)
+                video_pl_ratio = (double) pl / (double) pt;
+        }
+        prevVideoPacketsLost = videoStats.videoPacketsLost;
+        prevVideoPacketsRcvd = videoStats.videoPacketsReceived;
+    }
+    if ([stats isKindOfClass:[OTSubscriberKitAudioNetworkStats class]])
+    {
+        audio_pl_ratio = -1;
+        OTSubscriberKitAudioNetworkStats *audioStats =
+        (OTSubscriberKitAudioNetworkStats *) stats;
+        if (prevAudioPacketsRcvd != 0) {
+            uint64_t pl = audioStats.audioPacketsLost - prevAudioPacketsLost;
+            uint64_t pr = audioStats.audioPacketsReceived - prevAudioPacketsRcvd;
+            uint64_t pt = pl + pr;
+            if (pt > 0)
+                audio_pl_ratio = (double) pl / (double) pt;
+        }
+        prevAudioPacketsLost = audioStats.audioPacketsLost;
+        prevAudioPacketsRcvd = audioStats.audioPacketsReceived;
     }
 }
 
@@ -217,16 +274,13 @@ videoNetworkStatsUpdated:(OTSubscriberKitVideoNetworkStats*)stats
      session.sessionId];
     NSLog(@"sessionDidDisconnect (%@)", alertMessage);
     
-    bool canPub = isPublishing;
-    bool canSub = isSubscribing;
+    enum OTNetworkTestResult result = _result;
     OTError *error = [_error copy];
 
     [self cleanupSession];
     
-    [self dispatchResultsToDelegateWithConnectResult:YES
-                                       publishResult:canPub
-                                     subscribeResult:canSub
-                                               error:error];
+    [self dispatchResultsToDelegateWithResult:result
+                                        error:error];
 }
 
 
@@ -268,10 +322,8 @@ connectionDestroyed:(OTConnection *)connection
 didFailWithError:(OTError*)error
 {
     NSLog(@"didFailWithError: (%@)", error);
-    [self dispatchResultsToDelegateWithConnectResult:NO
-                                       publishResult:NO
-                                     subscribeResult:NO
-                                               error:error];
+    [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                        error:error];
 }
 
 # pragma mark - OTSubscriber delegate callbacks
@@ -284,30 +336,44 @@ didFailWithError:(OTError*)error
 
     if(!_runQualityStatsTest)
     {
-        isConnected = YES;
-        isPublishing = YES;
-        isSubscribing = YES;
+        _result = OTNetworkTestResultVideoAndVoice;
         [_session disconnect:nil];
     } else
     {
         dispatch_time_t delay = dispatch_time(DISPATCH_TIME_NOW,
                                               _qualityTestDuration * NSEC_PER_SEC);
         dispatch_after(delay,dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT,0),^{
-            isConnected = YES;
-            isPublishing =  (bw < 150000) ? NO : YES;
-            isSubscribing = (bw < 150000) ? NO : YES;
-            if(!isPublishing)
+            
+            enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
+            NSDictionary* userInfo = nil;
+            if (video_bw < 50000 || video_pl_ratio > 5 || audio_pl_ratio > 5)
             {
-                NSDictionary* userInfo = [NSDictionary
-                                          dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
-                                          "to start a call, please try it again later "
-                                          "or connect to another network",
-                                          NSLocalizedDescriptionKey,
-                                          nil];
+                result = OTNetworkTestResultNotGood;
+                userInfo = [NSDictionary
+                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                            "to start a video or audio call, please try it again later "
+                            "or connect to another network",
+                            NSLocalizedDescriptionKey,
+                            nil];
+            }
+            else if (video_bw < 150000 || video_pl_ratio > 3 || audio_pl_ratio > 3)
+            {
+                result = OTNetworkTestResultVoiceOnly;
+                userInfo = [NSDictionary
+                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                            "to start a video call, please try it again later "
+                            "or connect to another network",
+                            NSLocalizedDescriptionKey,
+                            nil];
+            }
+
+            if(userInfo)
+            {
                 _error = [[OTError alloc] initWithDomain:@"OTSubscriber"
                                                             code:-1
                                                         userInfo:userInfo];
             }
+            _result = result;
             [_session disconnect:nil];
         });
     }
@@ -319,10 +385,8 @@ didFailWithError:(OTError*)error
     NSLog(@"subscriber %@ didFailWithError %@",
           subscriber.stream.streamId,
           error);
-    [self dispatchResultsToDelegateWithConnectResult:YES
-                                       publishResult:YES
-                                     subscribeResult:NO
-                                               error:error];
+    [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                        error:error];
 
 }
 
@@ -350,10 +414,8 @@ didFailWithError:(OTError*)error
 {
     NSLog(@"publisher didFailWithError %@", error);
     [self cleanupPublisher];
-    [self dispatchResultsToDelegateWithConnectResult:YES
-                                       publishResult:NO
-                                     subscribeResult:NO
-                                               error:error];
+    [self dispatchResultsToDelegateWithResult:OTNetworkTestResultNotGood
+                                        error:error];
 }
 
 @end
