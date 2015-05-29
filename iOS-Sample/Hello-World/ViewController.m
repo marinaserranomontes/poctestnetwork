@@ -76,7 +76,15 @@ static NSString* const kToken = @"";
     _networkTest = [[OTNetworkTest alloc] init];
     
     [self.activityIndicatorView startAnimating];
-    self.statusLabel.text = @"Checking network...";
+    if (kApiKey.length == 0 || kSessionId.length == 0 || kToken == 0)
+    {
+        self.statusLabel.text = @"Provide api key,session id and token";
+        self.activityIndicatorView.hidden = YES;
+    }
+    else
+    {
+        self.statusLabel.text = @"Checking network...";
+    }
     self.resultLabel.text = @"";
     [_networkTest runConnectivityTestWithApiKey:kApiKey
                                       sessionId:kSessionId
