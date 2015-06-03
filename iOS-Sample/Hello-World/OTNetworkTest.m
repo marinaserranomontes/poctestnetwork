@@ -131,6 +131,7 @@ OTSubscriberKitNetworkStatsDelegate >
     _publisher =
     [[OTPublisher alloc] initWithDelegate:self
                                      name:[[UIDevice currentDevice] name]];
+    _publisher.audioFallbackEnabled = NO;
     OTError *error = nil;
     [_session publish:_publisher error:&error];
     if (error)
