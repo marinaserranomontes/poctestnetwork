@@ -195,10 +195,10 @@ videoNetworkStatsUpdated:(OTSubscriberKitVideoNetworkStats*)stats
     {
         video_bw = (8 * (stats.videoBytesReceived - prevVideoBytes)) / ((stats.timestamp - prevVideoTimestamp) / 1000ull);
         
-        NSLog(@"videoBytesReceived %llu, bps %ld, packetsLost %llu",stats.videoBytesReceived, video_bw, stats.videoPacketsLost);
         prevVideoTimestamp = stats.timestamp;
         prevVideoBytes = stats.videoBytesReceived;
         [self checkQuality:stats];
+         NSLog(@"videoBytesReceived %llu, bps %ld, packetsLost %.2f",stats.videoBytesReceived, video_bw, video_pl_ratio);
     }
 }
 
@@ -215,11 +215,11 @@ audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
     if (stats.timestamp - prevAudioTimestamp >= timeDelta)
     {
         audio_bw = (8 * (stats.audioBytesReceived - prevAudioBytes)) / ((stats.timestamp - prevAudioTimestamp) / 1000ull);
-        
-        NSLog(@"audioBytesReceived %llu, bps %ld, packetsLost %llu",stats.audioBytesReceived, audio_bw,stats.audioPacketsLost);
+
         prevAudioTimestamp = stats.timestamp;
         prevAudioBytes = stats.audioBytesReceived;
         [self checkQuality:stats];
+        NSLog(@"audioBytesReceived %llu, bps %ld, packetsLost %.2f",stats.audioBytesReceived, audio_bw,audio_pl_ratio);
     }
 }
 
