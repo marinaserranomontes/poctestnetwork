@@ -26,7 +26,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private static final String APIKEY = "";
     private static final boolean SUBSCRIBE_TO_SELF = true;
 
-    private static final int TEST_DURATION = 20; //sec
+    private static final int TEST_DURATION = 10; //test quality duration in sec
     private static final int TIME_SEC = 1000; //1 sec
 
     private Session mSession;
@@ -171,15 +171,15 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             mProgressDialog.dismiss();
             Log.i(LOGTAG, "Check quality stats data");
 
-            if (mVideoBw > 150000 || mVideoPLRatio < 3 || mAudioPLRatio < 3) {
-                showAlert("All good", "You're all set!");
-            } else {
-                if (mVideoBw > 30000) {
+            if ( mVideoBw < 50000 || mVideoPLRatio > 5 || mAudioPLRatio > 5 ) {
+                showAlert("No good", "You can't successfully connect");
+            }
+            else {
+                if ( mVideoBw < 150000 || mVideoPLRatio > 3 || mAudioPLRatio > 3 ) {
                     showAlert("Voice-only", "Your bandwidth is too low for video");
-                } else {
-                    if (mVideoBw < 30000 || mVideoPLRatio > 3 || mAudioPLRatio > 3) {
-                        showAlert("No good", "You can't successfully connect");
-                    }
+                }
+                else {
+                    showAlert("All good", "You're all set!");
                 }
             }
         }
@@ -303,7 +303,6 @@ public class MainActivity extends Activity implements Session.SessionListener, P
         }
         showAlert("No good", "You can't successfully connect. Subscriber error: " + opentokError.getMessage());
     }
-
 
     private Runnable statsRunnable = new Runnable() {
 
