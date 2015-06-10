@@ -219,7 +219,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private void checkAudioQuality() {
         if (mSession != null) {
             Log.i(LOGTAG, "Check audio quality stats data");
-            if ( mAudioPLRatio < 0.03 ){
+            if ( mAudioPLRatio < 0.05 ){
                 //go to video call to check the quality with enabled video
                 mPublisher.setPublishVideo(true);
                 mSubscriber.setSubscribeToVideo(true);
@@ -236,7 +236,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
         if (mSession != null) {
             Log.i(LOGTAG, "Check quality stats data");
 
-            if ( mVideoBw < 150000 || mVideoPLRatio > 0.05 ) {
+            if ( mVideoBw < 150000 || mVideoPLRatio > 0.03 ) {
                 showAlert("Voice-only", "Your bandwidth is too low for video");
             }
             else {
