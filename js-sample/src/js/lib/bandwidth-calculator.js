@@ -6,8 +6,8 @@ module.exports = function(config) {
   var intervalId;
 
   config = defaults(config, {
-    pollingInterval: 900,
-    windowSize: 6000,
+    pollingInterval: 500,
+    windowSize: 2000,
     subscriber: undefined
   });
 
