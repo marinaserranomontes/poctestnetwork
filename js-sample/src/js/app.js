@@ -52,15 +52,27 @@ var callbacks = {
       // here we can decide what to do.
       console.log('Test concluded', results);
 
-      if (results.video.averageBytes > 150000 && results.video.averagePacketLoss < 0.03 && results.audio.averagePacketLoss < 0.03) {
+      if (results.video.bytesPerSecond > 150000 && results.video.packetLossRatioPerSecond < 0.03 && results.audio.packetLossRatioPerSecond < 0.03) {
         statusMessageEl.innerText = 'You\'re all set!';
         statusIconEl.src = 'assets/icon_tick.svg';
-      } else if (results.video.averageBytes > 30000) {
+      } else if (results.video.bytesPerSecond > 5000 && results.video.packetLossRatioPerSecond < 0.03) {
         statusMessageEl.innerText = 'Your bandwidth is too low for video';
         statusIconEl.src = 'assets/icon_warning.svg';
       } else {
-        statusMessageEl.innerText = 'You can\'t successfully connect';
-        statusIconEl.src = 'assets/icon_error.svg';
+
+        // maybe try audio only
+        statusMessageEl.innerText = 'Trying audio only';
+        publisher.publishVideo(false);
+
+        performQualityTest({subscriber: subscribe, timeout: 5000}, function(error, results) {
+          if (results.audio.bytesPerSecond > 5000 && results.audio.packetLossRatioPerSecond < 0.03) {
+            statusMessageEl.innerText = 'Your bandwidth can support audio only';
+            statusIconEl.src = 'assets/icon_warning.svg';
+          } else {
+            statusMessageEl.innerText = 'Your bandwidth is too low for audio';
+            statusIconEl.src = 'assets/icon_error.svg';
+          }
+        });
       }
     });
   },
