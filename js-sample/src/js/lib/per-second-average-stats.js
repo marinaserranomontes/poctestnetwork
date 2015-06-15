@@ -6,7 +6,7 @@ module.exports = function(statsBuffer, seconds) {
   ['video', 'audio'].forEach(function(type) {
     stats[type] = {
       packetsPerSecond: sum(pluck(statsBuffer, type), 'packetsReceived') / seconds,
-      bytesPerSecond: sum(pluck(statsBuffer, type), 'bytesReceived') / seconds,
+      bitsPerSecond: (sum(pluck(statsBuffer, type), 'bytesReceived') * 8) / seconds,
       packetsLostPerSecond: sum(pluck(statsBuffer, type), 'packetsLost') / seconds
     };
     stats[type].packetLossRatioPerSecond = stats[type].packetsLostPerSecond / stats[type].packetsPerSecond;
