@@ -20,7 +20,7 @@ var testStreamingCapability = function(subscriber, callback) {
   performQualityTest({subscriber: subscriber, timeout: TEST_TIMEOUT_MS}, function(error, results) {
     console.log('Test concluded', results);
 
-    if (results.video.bytesPerSecond > 150000 && results.video.packetLossRatioPerSecond < 0.03 && results.audio.packetLossRatioPerSecond < 0.03) {
+    if (results.video.bitsPerSecond > 150000 && results.video.packetLossRatioPerSecond < 0.03 && results.audio.packetLossRatioPerSecond < 0.03) {
       return callback(false, {
         text: "You're all set!",
         icon: 'assets/icon_tick.svg'
