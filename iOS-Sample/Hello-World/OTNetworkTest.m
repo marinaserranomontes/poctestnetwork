@@ -9,6 +9,9 @@
 #import "OTNetworkTest.h"
 #import "OTNetworkStatsKit.h"
 
+#define TIME_WINDOW 3000 // 3 seconds
+#define AUDIO_ONLY_TEST_DURATION 6 // 6 seconds
+
 @interface OTNetworkTest ()
 <OTSessionDelegate, OTSubscriberKitDelegate, OTPublisherDelegate,
 OTSubscriberKitNetworkStatsDelegate >
@@ -190,15 +193,14 @@ videoNetworkStatsUpdated:(OTSubscriberKitVideoNetworkStats*)stats
         prevVideoBytes = stats.videoBytesReceived;
     }
     
-    int timeDelta = 1000; // 1 second
-    if (stats.timestamp - prevVideoTimestamp >= timeDelta)
+    if (stats.timestamp - prevVideoTimestamp >= TIME_WINDOW)
     {
         video_bw = (8 * (stats.videoBytesReceived - prevVideoBytes)) / ((stats.timestamp - prevVideoTimestamp) / 1000ull);
-        
+
+        [self processStats:stats];
         prevVideoTimestamp = stats.timestamp;
         prevVideoBytes = stats.videoBytesReceived;
-        [self checkQuality:stats];
-         NSLog(@"videoBytesReceived %llu, bps %ld, packetsLost %.2f",stats.videoBytesReceived, video_bw, video_pl_ratio);
+        NSLog(@"videoBytesReceived %llu, bps %ld, packetsLost %.2f",stats.videoBytesReceived, video_bw, video_pl_ratio);
     }
 }
 
@@ -211,19 +213,86 @@ audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
         prevAudioBytes = stats.audioBytesReceived;
     }
     
-    int timeDelta = 1000; // 1 second
-    if (stats.timestamp - prevAudioTimestamp >= timeDelta)
+    if (stats.timestamp - prevAudioTimestamp >= TIME_WINDOW)
     {
         audio_bw = (8 * (stats.audioBytesReceived - prevAudioBytes)) / ((stats.timestamp - prevAudioTimestamp) / 1000ull);
 
+        [self processStats:stats];
         prevAudioTimestamp = stats.timestamp;
         prevAudioBytes = stats.audioBytesReceived;
-        [self checkQuality:stats];
         NSLog(@"audioBytesReceived %llu, bps %ld, packetsLost %.2f",stats.audioBytesReceived, audio_bw,audio_pl_ratio);
     }
 }
+- (void)checkQualityAndDisconnectSession
+{
+    enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
+    NSDictionary* userInfo = nil;
+    
+    BOOL canDoVideo = (video_bw < 50000 || video_pl_ratio > 0.03);
+    BOOL canDoAudio = (audio_bw < 25000 || audio_pl_ratio > 0.05);
+    
+    if (!canDoVideo && !canDoAudio)
+    {
+        NSLog(@"Starting Audio Only Test");
+        // test for audio only stream
+        _publisher.publishVideo = NO;
+        
+        dispatch_time_t delay = dispatch_time(DISPATCH_TIME_NOW,
+                                              AUDIO_ONLY_TEST_DURATION * NSEC_PER_SEC);
+        dispatch_after(delay,dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT,0),^{
+            
+            enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
+            NSDictionary* userInfo = nil;
+            // you can tune audio bw threshold value based on your needs.
+            if (audio_bw < 25000 ||  audio_pl_ratio > 0.05)
+            {
+                result = OTNetworkTestResultNotGood;
+                userInfo = [NSDictionary
+                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                            "to start a video or audio call, please try it again later "
+                            "or connect to another network",
+                            NSLocalizedDescriptionKey,
+                            nil];
 
-- (void)checkQuality:(id)stats
+            } else
+            {
+                result = OTNetworkTestResultVoiceOnly;
+                userInfo = [NSDictionary
+                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                            "to start a video call, please try it again later "
+                            "or connect to another network",
+                            NSLocalizedDescriptionKey,
+                            nil];
+            }
+            _error = [[OTError alloc] initWithDomain:@"OTSubscriber"
+                                                code:-1
+                                            userInfo:userInfo];
+            _result = result;
+            [_session disconnect:nil];
+        });
+    }
+    else if (canDoAudio)
+    {
+        result = OTNetworkTestResultVoiceOnly;
+        userInfo = [NSDictionary
+                    dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                    "to start a video call, please try it again later "
+                    "or connect to another network",
+                    NSLocalizedDescriptionKey,
+                    nil];
+        _error = [[OTError alloc] initWithDomain:@"OTSubscriber"
+                                            code:-1
+                                        userInfo:userInfo];
+        _result = result;
+        [_session disconnect:nil];
+        
+    } else
+    {
+        _result = result;
+        [_session disconnect:nil];
+    }
+}
+- (void)processStats:(id)stats
 {
     if ([stats isKindOfClass:[OTSubscriberKitVideoNetworkStats class]])
     {
@@ -345,37 +414,7 @@ didFailWithError:(OTError*)error
                                               _qualityTestDuration * NSEC_PER_SEC);
         dispatch_after(delay,dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT,0),^{
             
-            enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
-            NSDictionary* userInfo = nil;
-            if (video_bw < 50000 || video_pl_ratio > 5 || audio_pl_ratio > 5)
-            {
-                result = OTNetworkTestResultNotGood;
-                userInfo = [NSDictionary
-                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
-                            "to start a video or audio call, please try it again later "
-                            "or connect to another network",
-                            NSLocalizedDescriptionKey,
-                            nil];
-            }
-            else if (video_bw < 150000 || video_pl_ratio > 3 || audio_pl_ratio > 3)
-            {
-                result = OTNetworkTestResultVoiceOnly;
-                userInfo = [NSDictionary
-                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
-                            "to start a video call, please try it again later "
-                            "or connect to another network",
-                            NSLocalizedDescriptionKey,
-                            nil];
-            }
-
-            if(userInfo)
-            {
-                _error = [[OTError alloc] initWithDomain:@"OTSubscriber"
-                                                            code:-1
-                                                        userInfo:userInfo];
-            }
-            _result = result;
-            [_session disconnect:nil];
+            [self checkQualityAndDisconnectSession];
         });
     }
 }
