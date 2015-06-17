@@ -214,7 +214,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             mPrevVideoBytes = stats.videoBytesReceived;
         }
 
-        if (videoTimestamp - mPrevVideoTimestamp > TIME_WINDOW) {
+        if (videoTimestamp - mPrevVideoTimestamp >= TIME_WINDOW) {
             //calculate video packets lost ratio
             if (mPrevVideoPacketsRcvd != 0) {
                 long pl = stats.videoPacketsLost - mPrevVideoPacketsLost;
@@ -231,8 +231,13 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
             //calculate video bandwidth
             mVideoBw = (long) ((8 * (stats.videoBytesReceived - mPrevVideoBytes)) / (videoTimestamp - mPrevVideoTimestamp));
+
+            mPrevVideoTimestamp = videoTimestamp;
+            mPrevVideoBytes = stats.videoBytesReceived;
+
+            Log.i(LOGTAG, "Video bandwidth: " + mVideoBw + " Video Bytes received: " + stats.videoBytesReceived + " Video packet lost: " + stats.videoPacketsLost + " Video packet loss ratio: " + mVideoPLRatio);
+
         }
-        Log.i(LOGTAG, "Video bandwidth: " + mVideoBw + " Video Bytes received: " + stats.videoBytesReceived + " Video packet lost: " + stats.videoPacketsLost + " Video packet loss ratio: " + mVideoPLRatio);
     }
 
     private void checkAudioStats(SubscriberKit.SubscriberAudioStats stats) {
@@ -244,7 +249,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             mPrevAudioBytes = stats.audioBytesReceived;
         }
 
-        if (audioTimestamp - mPrevAudioTimestamp > TIME_WINDOW) {
+        if (audioTimestamp - mPrevAudioTimestamp >= TIME_WINDOW) {
             //calculate audio packets lost ratio
             if (mPrevAudioPacketsRcvd != 0) {
                 long pl = stats.audioPacketsLost - mPrevAudioPacketsLost;
@@ -260,9 +265,15 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
             //calculate audio bandwidth
             mAudioBw = (long) ((8 * (stats.audioBytesReceived - mPrevAudioBytes)) / (audioTimestamp - mPrevAudioTimestamp));
+
+            mPrevAudioTimestamp = audioTimestamp;
+            mPrevAudioBytes = stats.audioBytesReceived;
+
+            Log.i(LOGTAG, "Audio bandwidth: " + mAudioBw + " Audio Bytes received: " + stats.audioBytesReceived + " Audio packet lost: " + stats.audioPacketsLost + " Audio packet loss ratio: " + mAudioPLRatio);
+
         }
-        Log.i(LOGTAG, "Audio bandwidth: " + mAudioBw + " Audio Bytes received: " + stats.audioBytesReceived + " Audio packet lost: " + stats.audioPacketsLost + " Audio packet loss ratio: " + mAudioPLRatio);
-    }
+
+   }
 
     private void checkVideoQuality() {
         if (mSession != null) {
