@@ -297,7 +297,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private void checkAudioQuality() {
         if (mSession != null) {
             Log.i(LOGTAG, "Check audio quality stats data");
-            if (mAudioBw < 50000 || mAudioPLRatio > 0.05) {
+            if (mAudioBw < 25000 || mAudioPLRatio > 0.05) {
                 showAlert("Not good", "You can't connect successfully");
             } else {
                 showAlert("Voice-only", "Your bandwidth is too low for video");
