@@ -26,8 +26,9 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private static final String APIKEY = "";
 
     private static final int TEST_DURATION = 20; //test quality duration in seconds
-    private static final int TIME_SEC = 1000; //1 sec
-    private static final int TIME_WINDOW = 15; //time interval to check the video quality in seconds
+    private static final int TIME_WINDOW = 3; //3 seconds
+    private static final int TIME_VIDEO_WINDOW = 15; //time interval to check the video quality in seconds
+
 
     private Session mSession;
     private Publisher mPublisher;
@@ -39,8 +40,17 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private double mAudioPLRatio = 0.0;
     private long mAudioBw = 0;
 
-    private long startTimeAudio = 0; //started audio stats time in seconds
-    private long startTimeVideo = 0; //started video stats time in seconds
+    private long mPrevVideoPacketsLost = 0;
+    private long mPrevVideoPacketsRcvd = 0;
+    private double mPrevVideoTimestamp = 0;
+    private long mPrevVideoBytes = 0;
+
+    private long mPrevAudioPacketsLost = 0;
+    private long mPrevAudioPacketsRcvd = 0;
+    private double mPrevAudioTimestamp = 0;
+    private long mPrevAudioBytes = 0;
+
+    private long mStartTestTime = 0;
 
     private boolean audioOnly = false;
 
@@ -141,7 +151,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     @Override
     public void onConnected(SubscriberKit subscriberKit) {
         Log.i(LOGTAG, "Subscriber onConnected");
-        mHandler.postDelayed(statsRunnable, TEST_DURATION * TIME_SEC);
+        mHandler.postDelayed(statsRunnable, TEST_DURATION * 1000);
     }
 
     @Override
@@ -165,13 +175,14 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             @Override
             public void onVideoStats(SubscriberKit subscriber,
                                      SubscriberKit.SubscriberVideoStats stats) {
-                if (startTimeVideo == 0) {
-                    startTimeVideo = System.currentTimeMillis()/1000;
+
+                if (mStartTestTime == 0) {
+                    mStartTestTime = System.currentTimeMillis() / 1000;
                 }
                 checkVideoStats(stats);
 
-                //check video quality after TIME_WINDOW seconds
-                if (((System.currentTimeMillis()/1000 - startTimeVideo) > TIME_WINDOW ) && !audioOnly ) {
+                //check video quality after TIME_VIDEO_WINDOW seconds
+                if (((System.currentTimeMillis() / 1000 - mStartTestTime) > TIME_VIDEO_WINDOW) && !audioOnly) {
                     checkVideoQuality();
                 }
             }
@@ -181,11 +192,8 @@ public class MainActivity extends Activity implements Session.SessionListener, P
         mSubscriber.setAudioStatsListener(new SubscriberKit.AudioStatsListener() {
             @Override
             public void onAudioStats(SubscriberKit subscriber, SubscriberKit.SubscriberAudioStats stats) {
-                if (startTimeAudio == 0) {
-                    startTimeAudio = System.currentTimeMillis()/1000;
-                }
-                checkAudioStats(stats);
 
+                checkAudioStats(stats);
 
             }
         });
@@ -198,30 +206,68 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     }
 
     private void checkVideoStats(SubscriberKit.SubscriberVideoStats stats) {
-        long now = System.currentTimeMillis()/1000;
+        double videoTimestamp = stats.timeStamp / 1000;
 
-        mVideoPLRatio = (double) stats.videoPacketsLost / (double) stats.videoPacketsReceived;
-        if ((now - startTimeVideo) != 0) {
-            mVideoBw = ((8 * (stats.videoBytesReceived)) / (now - startTimeVideo));
+        //initialize values
+        if (mPrevVideoTimestamp == 0) {
+            mPrevVideoTimestamp = videoTimestamp;
+            mPrevVideoBytes = stats.videoBytesReceived;
         }
-        Log.i(LOGTAG, "Video bandwidth: " + mVideoBw + " Video Bytes received: "+ stats.videoBytesReceived + " Video packet lost: "+ stats.videoPacketsLost + " Video packet loss ratio: " + mVideoPLRatio);
+
+        if (videoTimestamp - mPrevVideoTimestamp > TIME_WINDOW) {
+            //calculate video packets lost ratio
+            if (mPrevVideoPacketsRcvd != 0) {
+                long pl = stats.videoPacketsLost - mPrevVideoPacketsLost;
+                long pr = stats.videoPacketsReceived - mPrevVideoPacketsRcvd;
+                long pt = pl + pr;
+
+                if (pt > 0) {
+                    mVideoPLRatio = (double) pl / (double) pt;
+                }
+            }
+
+            mPrevVideoPacketsLost = stats.videoPacketsLost;
+            mPrevVideoPacketsRcvd = stats.videoPacketsReceived;
+
+            //calculate video bandwidth
+            mVideoBw = (long) ((8 * (stats.videoBytesReceived - mPrevVideoBytes)) / (videoTimestamp - mPrevVideoTimestamp));
+        }
+        Log.i(LOGTAG, "Video bandwidth: " + mVideoBw + " Video Bytes received: " + stats.videoBytesReceived + " Video packet lost: " + stats.videoPacketsLost + " Video packet loss ratio: " + mVideoPLRatio);
     }
 
     private void checkAudioStats(SubscriberKit.SubscriberAudioStats stats) {
-        long now = System.currentTimeMillis()/1000;
+        double audioTimestamp = stats.timeStamp / 1000;
 
-        mAudioPLRatio = (double) stats.audioPacketsLost / (double) stats.audioPacketsReceived;
-        if ((now - startTimeAudio) != 0) {
-            mAudioBw = ((8 * (stats.audioBytesReceived)) / (now - startTimeAudio));
+        //initialize values
+        if (mPrevAudioTimestamp == 0) {
+            mPrevAudioTimestamp = audioTimestamp;
+            mPrevAudioBytes = stats.audioBytesReceived;
         }
-        Log.i(LOGTAG, "Audio bandwidth: " + mAudioBw + " Audio Bytes received: " + stats.audioBytesReceived + " Audio packet lost : " + stats.audioPacketsLost + " Audio packet loss ratio: " + mAudioPLRatio);
 
+        if (audioTimestamp - mPrevAudioTimestamp > TIME_WINDOW) {
+            //calculate audio packets lost ratio
+            if (mPrevAudioPacketsRcvd != 0) {
+                long pl = stats.audioPacketsLost - mPrevAudioPacketsLost;
+                long pr = stats.audioPacketsReceived - mPrevAudioPacketsRcvd;
+                long pt = pl + pr;
+
+                if (pt > 0) {
+                    mAudioPLRatio = (double) pl / (double) pt;
+                }
+            }
+            mPrevAudioPacketsLost = stats.audioPacketsLost;
+            mPrevAudioPacketsRcvd = stats.audioPacketsReceived;
+
+            //calculate audio bandwidth
+            mAudioBw = (long) ((8 * (stats.audioBytesReceived - mPrevAudioBytes)) / (audioTimestamp - mPrevAudioTimestamp));
+        }
+        Log.i(LOGTAG, "Audio bandwidth: " + mAudioBw + " Audio Bytes received: " + stats.audioBytesReceived + " Audio packet lost: " + stats.audioPacketsLost + " Audio packet loss ratio: " + mAudioPLRatio);
     }
 
     private void checkVideoQuality() {
         if (mSession != null) {
             Log.i(LOGTAG, "Check video quality stats data");
-            if ( mVideoBw < 150000 || mVideoPLRatio > 0.03 ) {
+            if (mVideoBw < 150000 || mVideoPLRatio > 0.03) {
                 //go to audio call to check the quality with video disabled
                 showAlert("Voice-only", "Your bandwidth is too low for video");
                 mProgressDialog = ProgressDialog.show(this, "Checking your available bandwidth for voice only", "Please wait");
@@ -240,10 +286,9 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     private void checkAudioQuality() {
         if (mSession != null) {
             Log.i(LOGTAG, "Check audio quality stats data");
-            if ( mAudioPLRatio > 0.05 ){
+            if (mAudioBw < 50000 || mAudioPLRatio > 0.05) {
                 showAlert("Not good", "You can't connect successfully");
-            }
-            else {
+            } else {
                 showAlert("Voice-only", "Your bandwidth is too low for video");
             }
         }
@@ -274,7 +319,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
         @Override
         public void run() {
-            if (mSession != null ) {
+            if (mSession != null) {
                 checkAudioQuality();
                 mSession.disconnect();
             }
