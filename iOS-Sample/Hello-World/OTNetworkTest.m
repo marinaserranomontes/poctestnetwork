@@ -228,8 +228,8 @@ audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
     enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
     NSDictionary* userInfo = nil;
     
-    BOOL canDoVideo = (video_bw < 50000 || video_pl_ratio > 0.03);
-    BOOL canDoAudio = (audio_bw < 25000 || audio_pl_ratio > 0.05);
+    BOOL canDoVideo = (video_bw >= 150000 && video_pl_ratio <= 0.03);
+    BOOL canDoAudio = (audio_bw >= 25000 && audio_pl_ratio <= 0.05);
     
     if (!canDoVideo && !canDoAudio)
     {
@@ -244,22 +244,21 @@ audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
             enum OTNetworkTestResult result = OTNetworkTestResultVideoAndVoice;
             NSDictionary* userInfo = nil;
             // you can tune audio bw threshold value based on your needs.
-            if (audio_bw < 25000 ||  audio_pl_ratio > 0.05)
-            {
-                result = OTNetworkTestResultNotGood;
-                userInfo = [NSDictionary
-                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
-                            "to start a video or audio call, please try it again later "
-                            "or connect to another network",
-                            NSLocalizedDescriptionKey,
-                            nil];
-
-            } else
+            if (audio_bw >= 25000 && audio_pl_ratio <= 0.05)
             {
                 result = OTNetworkTestResultVoiceOnly;
                 userInfo = [NSDictionary
                             dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
                             "to start a video call, please try it again later "
+                            "or connect to another network",
+                            NSLocalizedDescriptionKey,
+                            nil];
+            } else
+            {
+                result = OTNetworkTestResultNotGood;
+                userInfo = [NSDictionary
+                            dictionaryWithObjectsAndKeys:@"The quality of your network is not enough "
+                            "to start a video or audio call, please try it again later "
                             "or connect to another network",
                             NSLocalizedDescriptionKey,
                             nil];
@@ -271,7 +270,7 @@ audioNetworkStatsUpdated:(OTSubscriberKitAudioNetworkStats*)stats
             [_session disconnect:nil];
         });
     }
-    else if (canDoAudio)
+    else if (canDoAudio && !canDoVideo)
     {
         result = OTNetworkTestResultVoiceOnly;
         userInfo = [NSDictionary
