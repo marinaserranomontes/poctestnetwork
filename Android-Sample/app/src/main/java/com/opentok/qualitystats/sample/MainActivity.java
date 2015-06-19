@@ -181,7 +181,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
                 }
                 checkVideoStats(stats);
 
-                //check video quality after TIME_VIDEO_WINDOW seconds
+                //check quality of the video call after TIME_VIDEO_TEST seconds
                 if (((System.currentTimeMillis() / 1000 - mStartTestTime) > TIME_VIDEO_TEST) && !audioOnly) {
                     checkVideoQuality();
                 }
