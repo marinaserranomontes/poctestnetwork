@@ -27,7 +27,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
     private static final int TEST_DURATION = 20; //test quality duration in seconds
     private static final int TIME_WINDOW = 3; //3 seconds
-    private static final int TIME_VIDEO_WINDOW = 15; //time interval to check the video quality in seconds
+    private static final int TIME_VIDEO_TEST = 15; //time interval to check the video quality in seconds
 
 
     private Session mSession;
@@ -182,7 +182,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
                 checkVideoStats(stats);
 
                 //check video quality after TIME_VIDEO_WINDOW seconds
-                if (((System.currentTimeMillis() / 1000 - mStartTestTime) > TIME_VIDEO_WINDOW) && !audioOnly) {
+                if (((System.currentTimeMillis() / 1000 - mStartTestTime) > TIME_VIDEO_TEST) && !audioOnly) {
                     checkVideoQuality();
                 }
             }
