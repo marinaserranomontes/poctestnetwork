@@ -3,19 +3,22 @@ package com.opentok.qualitystats.sample;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 
+import com.opentok.android.AudioDeviceManager;
 import com.opentok.android.OpentokError;
 import com.opentok.android.Publisher;
 import com.opentok.android.PublisherKit;
 import com.opentok.android.Session;
 import com.opentok.android.Stream;
-import com.opentok.android.Subscriber;
 import com.opentok.android.SubscriberKit;
 import com.opentok.android.SubscriberKit.VideoStatsListener;
+import com.opentok.qualitystats.sample.audio.CustomAudioDevice;
 
 public class MainActivity extends Activity implements Session.SessionListener, PublisherKit.PublisherListener, SubscriberKit.SubscriberListener {
 
@@ -32,7 +35,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
     private Session mSession;
     private Publisher mPublisher;
-    private Subscriber mSubscriber;
+    private SubscriberKit mSubscriber;
 
     private double mVideoPLRatio = 0.0;
     private long mVideoBw = 0;
@@ -64,7 +67,9 @@ public class MainActivity extends Activity implements Session.SessionListener, P
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         sessionConnect();
+
     }
 
     @Override
@@ -79,8 +84,13 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     public void sessionConnect() {
         Log.i(LOGTAG, "Connecting session");
         if (mSession == null) {
+            CustomAudioDevice customAudioDevice = new CustomAudioDevice(MainActivity.this);
+            customAudioDevice.setAudioMute(true); //mute audio
+            AudioDeviceManager.setAudioDevice(customAudioDevice);
+
             mSession = new Session(this, APIKEY, SESSION_ID);
             mSession.setSessionListener(this);
+
 
             mProgressDialog = ProgressDialog.show(this, "Checking your available bandwidth", "Please wait");
             mSession.connect(TOKEN);
@@ -166,10 +176,11 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     }
 
     private void subscribeToStream(Stream stream) {
-        mSubscriber = new Subscriber(MainActivity.this, stream);
+        mSubscriber = new SubscriberKit(MainActivity.this, stream);
 
         mSubscriber.setSubscriberListener(this);
         mSession.subscribe(mSubscriber);
+
         mSubscriber.setVideoStatsListener(new VideoStatsListener() {
 
             @Override
@@ -197,7 +208,8 @@ public class MainActivity extends Activity implements Session.SessionListener, P
 
             }
         });
-    }
+
+          }
 
     private void unsubscribeFromStream(Stream stream) {
         if (mSubscriber.getStream().equals(stream)) {
@@ -336,5 +348,6 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             }
         }
     };
+
 
 }
