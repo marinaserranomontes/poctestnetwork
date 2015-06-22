@@ -61,7 +61,7 @@ public class CustomAudioDevice extends BaseAudioDevice {
 
     private AudioManager m_audioManager;
 
-    private boolean isMuted = false;
+    private boolean isRendererMuted = false;
 
     public CustomAudioDevice(Context context) {
         this.m_context = context;
@@ -397,7 +397,7 @@ public class CustomAudioDevice extends BaseAudioDevice {
                         // Log.d(LOG_TAG, "Samples read: " + samplesRead);
 
                         m_rendererLock.lock();
-                        if( !isMuted ) {
+                        if( !isRendererMuted ) {
                             // After acquiring the lock again
                             // we must check if we are still playing
                             if (m_audioTrack == null
@@ -518,8 +518,8 @@ public class CustomAudioDevice extends BaseAudioDevice {
         }
     }
 
-    public void setAudioMute (boolean isMuted) {
-        this.isMuted = isMuted;
+    public void setRendererMute (boolean isRendererMuted) {
+        this.isRendererMuted = isRendererMuted;
     }
 
 }

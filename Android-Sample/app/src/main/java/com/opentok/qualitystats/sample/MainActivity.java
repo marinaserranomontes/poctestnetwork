@@ -84,7 +84,7 @@ public class MainActivity extends Activity implements Session.SessionListener, P
             // Add a custom audio device before session initialization
             CustomAudioDevice customAudioDevice = new CustomAudioDevice(
                     MainActivity.this);
-            customAudioDevice.setAudioMute(true);
+            customAudioDevice.setRendererMute(true);
             AudioDeviceManager.setAudioDevice(customAudioDevice);
 
             mSession = new Session(this, APIKEY, SESSION_ID);
