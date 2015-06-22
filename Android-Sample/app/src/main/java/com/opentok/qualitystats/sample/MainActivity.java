@@ -16,6 +16,8 @@ import com.opentok.android.Stream;
 import com.opentok.android.Subscriber;
 import com.opentok.android.SubscriberKit;
 import com.opentok.android.SubscriberKit.VideoStatsListener;
+import com.opentok.android.AudioDeviceManager;
+import com.opentok.qualitystats.sample.audio.CustomAudioDevice;
 
 public class MainActivity extends Activity implements Session.SessionListener, PublisherKit.PublisherListener, SubscriberKit.SubscriberListener {
 
@@ -79,6 +81,12 @@ public class MainActivity extends Activity implements Session.SessionListener, P
     public void sessionConnect() {
         Log.i(LOGTAG, "Connecting session");
         if (mSession == null) {
+            // Add a custom audio device before session initialization
+            CustomAudioDevice customAudioDevice = new CustomAudioDevice(
+                    MainActivity.this);
+            customAudioDevice.setAudioMute(true);
+            AudioDeviceManager.setAudioDevice(customAudioDevice);
+
             mSession = new Session(this, APIKEY, SESSION_ID);
             mSession.setSessionListener(this);
 
